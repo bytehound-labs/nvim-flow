@@ -14,12 +14,22 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y neovim lua5.4
+          sudo apt-get install -y build-essential neovim lua5.4
 
       - name: Fetch plenary.nvim
         run: |
           mkdir -p .deps
           git clone --depth 1 https://github.com/nvim-lua/plenary.nvim .deps/plenary.nvim
+
+      - name: Build Tree-sitter Markdown parser
+        run: |
+          git clone --depth 1 --branch v0.3.2 https://github.com/tree-sitter-grammars/tree-sitter-markdown .deps/tree-sitter-markdown
+          mkdir -p .deps/markdown-parser/parser
+          cc -fPIC -shared \
+            -I.deps/tree-sitter-markdown/tree-sitter-markdown/src \
+            .deps/tree-sitter-markdown/tree-sitter-markdown/src/parser.c \
+            .deps/tree-sitter-markdown/tree-sitter-markdown/src/scanner.c \
+            -o .deps/markdown-parser/parser/markdown.so
 
       - name: Stylua check
         uses: JohnnyMorganz/stylua-action@v4
@@ -37,6 +47,7 @@ jobs:
       - name: Run plenary tests
         env:
           PLENARY_PATH: ${{ github.workspace }}/.deps/plenary.nvim
+          MARKDOWN_PARSER_PATH: ${{ github.workspace }}/.deps/markdown-parser
         run: |
           nvim --headless -u tests/minimal_init.lua \
             -c "PlenaryBustedDirectory tests/nvim-flow { minimal_init = 'tests/minimal_init.lua' }" \

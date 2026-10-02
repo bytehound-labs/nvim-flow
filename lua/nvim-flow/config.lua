@@ -465,6 +465,10 @@ local function cmd_uses_file_scoped_var(cmd)
 	return false
 end
 
+function M.uses_file_scoped_var(cmd)
+	return cmd_uses_file_scoped_var(cmd)
+end
+
 local function looks_like_path_pattern(value)
 	if type(value) ~= "string" then
 		return false

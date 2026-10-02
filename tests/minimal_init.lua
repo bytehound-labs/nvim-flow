@@ -8,4 +8,9 @@ if (vim.uv or vim.loop).fs_stat(plenary_path) then
 	vim.opt.runtimepath:prepend(plenary_path)
 end
 
+local markdown_parser_path = os.getenv("MARKDOWN_PARSER_PATH")
+if markdown_parser_path and (vim.uv or vim.loop).fs_stat(markdown_parser_path) then
+	vim.opt.runtimepath:prepend(markdown_parser_path)
+end
+
 vim.opt.swapfile = false

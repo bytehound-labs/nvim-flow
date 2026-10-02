@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/bytehound-labs/nvim-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/bytehound-labs/nvim-flow/actions/workflows/ci.yml)
 
-`nvim-flow` is a pure lua Neovim workflow runner for file-based commands defined in `.flow.yml`.
+`nvim-flow` is a Neovim workflow runner for file-based commands defined in `.flow.yml`, with cursor-local execution for shell code blocks in Markdown.
 
 ## Quick start
 
@@ -15,36 +15,37 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-2my8DhqH0BXx9IsO9rOmlR.gif)
+![](https://vhs.charm.sh/vhs-2maMBy9UvDLRYeFFn4uIUK.gif)
 
 ## Motivation
 
-I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback without extra runtime dependencies.
+I wanted a workflow that matches how I actually work in Neovim: simple YAML config, fast command resolution, and quick run/debug feedback. YAML workflows have no parser dependencies; Markdown execution uses Neovim's Tree-sitter API and a Markdown parser.
 
 ## Comparison with similar plugins
 
-| Feature                | **nvim-flow**                         | [overseer.nvim](https://github.com/stevearc/overseer.nvim) | [code_runner.nvim](https://github.com/CRAG666/code_runner.nvim) | [zuzu.nvim](https://github.com/gitpushjoe/zuzu.nvim) |
-| ---------------------- | ------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
-| Config format          | YAML (`.flow.yml`)                    | Lua / VS Code `tasks.json`                                 | Lua / JSON                                                      | Lua                                                  |
-| Per-file command args  | ✅ native in YAML                     | ⚠️ requires custom templates                               | ❌ filetype-level only                                          | ⚠️ via profiles                                      |
-| Recursive config merge | ✅ dir → `$HOME`                      | ❌                                                         | ❌                                                              | ❌                                                   |
-| `nvim-dap` integration | ✅ built-in `:FlowDebug`              | ✅ via `preLaunchTask`                                     | ❌                                                              | ❌                                                   |
-| Quickfix integration   | ✅ Python traceback                   | ✅ generic output parsing                                  | ❌                                                              | ✅ diagnostics                                       |
-| Command preview        | ✅ floating window                    | ❌                                                         | ❌                                                              | ❌                                                   |
-| Wrapped output buffer  | ✅ built-in buffer mode               | ❌ no documented plain-buffer output                       | ❌ terminal-style modes only                                    | ⚠️ configurable buffer-mode display strategy         |
-| Jump to config source  | ✅ `:FlowEdit`                        | ❌                                                         | ❌                                                              | ❌                                                   |
-| Match resolution       | basename / glob / ext / folder / repo | manual task selection                                      | filetype-based                                                  | filetype + dir depth                                 |
-| Multi-step workflows   | ❌                                    | ✅                                                         | ❌                                                              | ❌                                                   |
-| VS Code tasks compat   | ❌                                    | ✅                                                         | ✅ JSON import                                                  | ❌                                                   |
-| Dependencies           | none (pure Lua)                       | none (pure Lua)                                            | none (pure Lua)                                                 | none (pure Lua)                                      |
-| Setup complexity       | low — one YAML file                   | high — Lua templates + ECS components                      | low — Lua table                                                 | medium — Lua profiles + hooks                        |
+| Feature                | **nvim-flow**                                           | [overseer.nvim](https://github.com/stevearc/overseer.nvim) | [code_runner.nvim](https://github.com/CRAG666/code_runner.nvim) | [zuzu.nvim](https://github.com/gitpushjoe/zuzu.nvim) |
+| ---------------------- | ------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------- |
+| Config format          | YAML (`.flow.yml`) + Markdown shell fences              | Lua / VS Code `tasks.json`                                 | Lua / JSON                                                      | Lua                                                  |
+| Per-file command args  | ✅ native YAML + locked Markdown templates              | ⚠️ requires custom templates                               | ❌ filetype-level only                                          | ⚠️ via profiles                                      |
+| Recursive config merge | ✅ dir → `$HOME`                                        | ❌                                                         | ❌                                                              | ❌                                                   |
+| `nvim-dap` integration | ✅ built-in `:FlowDebug`                                | ✅ via `preLaunchTask`                                     | ❌                                                              | ❌                                                   |
+| Quickfix integration   | ✅ Python traceback                                     | ✅ generic output parsing                                  | ❌                                                              | ✅ diagnostics                                       |
+| Command preview        | ✅ floating window                                      | ❌                                                         | ❌                                                              | ❌                                                   |
+| Wrapped output buffer  | ✅ built-in buffer mode                                 | ❌ no documented plain-buffer output                       | ❌ terminal-style modes only                                    | ⚠️ configurable buffer-mode display strategy         |
+| Jump to config source  | ✅ `:FlowEdit`                                          | ❌                                                         | ❌                                                              | ❌                                                   |
+| Match resolution       | basename / glob / ext / folder / repo                   | manual task selection                                      | filetype-based                                                  | filetype + dir depth                                 |
+| Multi-step workflows   | ❌                                                      | ✅                                                         | ❌                                                              | ❌                                                   |
+| VS Code tasks compat   | ❌                                                      | ✅                                                         | ✅ JSON import                                                  | ❌                                                   |
+| Dependencies           | none for YAML; Tree-sitter Markdown parser for Markdown | none (pure Lua)                                            | none (pure Lua)                                                 | none (pure Lua)                                      |
+| Setup complexity       | low — one YAML file                                     | high — Lua templates + ECS components                      | low — Lua table                                                 | medium — Lua profiles + hooks                        |
 
 **Why nvim-flow?** If you run the same file with different arguments across projects and want those profiles stored in a simple, versionable YAML file next to your code — nvim-flow is the lightest path. overseer.nvim is the better choice for complex multi-step build pipelines or VS Code compatibility. code_runner.nvim works well if filetype-level granularity is sufficient. zuzu.nvim offers advanced profile resolution but has a steeper learning curve.
 
 ## Features
 
 - First-class `nvim-dap` integration through `:FlowDebug`
-- Run the entry under the cursor straight from a `.flow.yml` buffer (`:FlowRunHere`)
+- Run an entry from `.flow.yml` or a shell fence from Markdown under the cursor (`:FlowRunHere`)
+- Run supported Markdown shell fences in the configured output split
 - Flow source jump (`:FlowEdit`) to open the matched `.flow.yml` definition
 - File lock support (`:FlowToggleLock`)
 - Command preview in a floating window (`:FlowPreview`)
@@ -148,17 +149,17 @@ require("nvim-flow").setup({
 ## Commands
 
 - `:FlowRun` - run the resolved flow command in the configured split output mode
-- `:FlowRunHere` - run the flow entry under the cursor directly from a `.flow.yml` buffer
-- `:FlowDebug` - resolve the same flow command and launch a matching `nvim-dap` debug session
+- `:FlowRunHere` - run the flow entry under the cursor in `.flow.yml`, or the shell fence under the cursor in Markdown
+- `:FlowDebug` - debug the resolved flow command, or the Markdown shell fence under the cursor
 - `:FlowEdit` - open the matched `.flow.yml` file and jump to the resolved command line
 - `:FlowToggleLock[ {filepath}]` - toggle lock (or set lock to explicit path)
 - `:FlowSet {filepath}` - compatibility alias for setting lock directly
-- `:FlowPreview` - show resolved command for current (or locked) file
+- `:FlowPreview` - show the resolved command for the current (or locked) file, or the Markdown shell fence under the cursor
 - `:FlowQuickfix` - parse the last flow output as Python traceback and fill quickfix
 
 ## FlowEdit behavior
 
-`FlowEdit` follows the same resolution pipeline as `FlowRun` / `FlowPreview`, then opens the corresponding `.flow.yml` and jumps to the resolved command line.
+`FlowEdit` follows the same YAML resolution pipeline as `FlowRun`, then opens the corresponding `.flow.yml` and jumps to the resolved command line. This remains true when the current buffer is Markdown.
 
 By default it opens in a new tab (`edit_open_command = "tabedit"`). Change `edit_open_command` if you prefer `edit`, `split`, or `vsplit`.
 
@@ -166,7 +167,7 @@ By default it opens in a new tab (`edit_open_command = "tabedit"`). Change `edit
 
 Sometimes you want to launch a flow without opening its source file. From inside a `.flow.yml` buffer, place the cursor anywhere in an entry's block (its key, `match`, `cmd`, or comments) and run `:FlowRunHere`. nvim-flow runs the entry the cursor sits in, bypassing match resolution entirely. It reads the live buffer, so unsaved edits are honored.
 
-The `run` keymap is context-aware: inside a `.flow.yml` buffer it runs the entry under the cursor (like `:FlowRunHere`), and everywhere else it runs the flow resolved for the current file (like `:FlowRun`). A single mapping — for example `run = "<CR>"` — therefore covers both.
+The `run` keymap is context-aware: inside a `.flow.yml` buffer it runs the entry under the cursor, and inside a Markdown buffer it runs the shell fence under the cursor. Elsewhere it runs the flow resolved for the current file. A single mapping — for example `run = "<CR>"` — covers all three contexts.
 
 Entries that use no file-scoped template variables (`{{filepath}}`, `{{filename}}`, `{{ext}}`) run as-is — ideal for named, project-level tasks. When an entry _does_ use a file-scoped variable, nvim-flow resolves a single source file with this precedence:
 
@@ -184,9 +185,30 @@ compare-prosafe-pou:
 
 Running `:FlowRunHere` anywhere in this block executes the command directly. Because it uses no file-scoped variables, no source file is resolved.
 
+## Run from Markdown
+
+Open a `.md` or `.markdown` file and place the cursor anywhere inside a closed `sh`, `bash`, or `shell` fenced code block, including on its opening or closing fence. Run `:FlowRunHere` or use the configured `run` keymap. Fences inside blockquotes and lists are supported. The code block is read from the live buffer, so unsaved changes are honored. `FlowPreview` previews the selected block, and `FlowDebug` passes it to the existing debugger integration.
+
+````markdown
+# Project checks
+
+```bash
+cd "{{dir}}"
+printf 'Running checks for {{repo}}\n'
+```
+````
+
+Shell fence labels select executable blocks; they do not change the interpreter. Commands use Bash by default, and a shebang on the first line of the block overrides it. Normal execution uses the configured terminal or buffer split, and output is not inserted into the Markdown document. `FlowRun` and `FlowEdit` continue to use `.flow.yml` resolution when a Markdown file is open.
+
+Markdown execution requires the Tree-sitter `markdown` parser to be available on Neovim's runtime path. Install the parser with `nvim-treesitter` or another parser installer; `nvim-flow` uses Neovim's built-in Tree-sitter API and does not require the `nvim-treesitter` plugin at runtime. YAML workflows continue to work without the Markdown parser. If the parser is missing, Markdown actions report an error instead of falling back to YAML.
+
+Project template variables such as `{{dir}}`, `{{repo}}`, and `{{folder}}` use the Markdown file's location unless the command also uses file-scoped variables, in which case all variables use the locked target's context. File-scoped variables (`{{filepath}}`, `{{filename}}`, and `{{ext}}`) require a locked target file. Set one with `:FlowSet path/to/file` before running the block; without a lock, the command is rejected. The terminal runner inherits Neovim's working directory; use `cd "{{dir}}"` when it should run from the Markdown file's directory.
+
+Only `sh`, `bash`, and `shell` fences are executable. Unlabeled blocks, other languages, empty blocks, and fences without a closing delimiter are rejected. Opening a Markdown file never runs its contents, but running a shell fence executes its commands locally, so only run blocks from documents you trust.
+
 ## Debug integration (`nvim-dap`)
 
-`FlowDebug` uses the same command resolution pipeline as `FlowRun`, then parses the command to create a debug configuration for `nvim-dap` and calls `dap.continue()`.
+For file-based commands, `FlowDebug` uses the same resolution pipeline as `FlowRun`, then parses the command to create a debug configuration for `nvim-dap` and calls `dap.continue()`. In a Markdown buffer, it instead uses the shell fence under the cursor.
 
 Supported command families include `python` / `python3`, `uv run ...` (including module mode), and `node`.
 
@@ -321,6 +343,8 @@ Then it populates and opens the quickfix list.
 ## Testing
 
 This plugin uses plenary's busted harness.
+
+Markdown tests require a Tree-sitter `markdown` parser on the runtime path. CI builds the pinned `tree-sitter-markdown` v0.3.2 parser and provides it through `MARKDOWN_PARSER_PATH`. Local test setups can install the parser with `nvim-treesitter`.
 
 Run tests:
 

@@ -1,5 +1,6 @@
 local config = require("nvim-flow.config")
 local lock = require("nvim-flow.lock")
+local markdown = require("nvim-flow.markdown")
 local runner = require("nvim-flow.runner")
 local debug_runner = require("nvim-flow.debug_runner")
 local preview = require("nvim-flow.preview")
@@ -56,6 +57,60 @@ local function resolve_cmd_def()
 	return cmd_def
 end
 
+local function current_buffer_snapshot()
+	local buf = vim.api.nvim_get_current_buf()
+	return {
+		buf = buf,
+		name = vim.api.nvim_buf_get_name(buf),
+		filetype = vim.bo[buf].filetype,
+		lnum = vim.api.nvim_win_get_cursor(0)[1],
+		lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false),
+	}
+end
+
+local function normalize_snapshot(snapshot)
+	snapshot = snapshot or current_buffer_snapshot()
+	local buf = snapshot.buf
+
+	if snapshot.name == nil and buf and vim.api.nvim_buf_is_valid(buf) then
+		snapshot.name = vim.api.nvim_buf_get_name(buf)
+	end
+	if snapshot.filetype == nil and buf and vim.api.nvim_buf_is_valid(buf) then
+		snapshot.filetype = vim.bo[buf].filetype
+	end
+	if snapshot.lnum == nil then
+		snapshot.lnum = vim.api.nvim_win_get_cursor(0)[1]
+	end
+	if snapshot.lines == nil then
+		if not buf or not vim.api.nvim_buf_is_loaded(buf) then
+			return nil, "source buffer is no longer available"
+		end
+		snapshot.lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+	end
+	return snapshot
+end
+
+local function is_flow_config_name(name)
+	return name ~= "" and vim.fs.basename(name) == (state.opts.config_file or ".flow.yml")
+end
+
+local function is_markdown_snapshot(snapshot)
+	if is_flow_config_name(snapshot.name or "") then
+		return false
+	end
+
+	if snapshot.filetype == "markdown" then
+		return true
+	end
+
+	local name = vim.fs.basename(snapshot.name or ""):lower()
+	return name:match("%.md$") ~= nil or name:match("%.markdown$") ~= nil
+end
+
+local function is_cursor_run_snapshot(snapshot)
+	return is_flow_config_name(snapshot.name or "") or is_markdown_snapshot(snapshot)
+end
+
 local function setup_keymaps()
 	local keymaps = state.opts.keymaps or {}
 	local group = vim.api.nvim_create_augroup("NvimFlowKeymaps", { clear = true })
@@ -67,20 +122,8 @@ local function setup_keymaps()
 		end
 	end
 
-	local config_file = state.opts.config_file or ".flow.yml"
-
-	local function is_flow_config_buffer(bufnr)
-		local name = vim.api.nvim_buf_get_name(bufnr)
-		return name ~= "" and vim.fs.basename(name) == config_file
-	end
-
 	local function run_here_from_current()
-		local snapshot = {
-			buf = vim.api.nvim_get_current_buf(),
-			name = vim.api.nvim_buf_get_name(0),
-			lnum = vim.api.nvim_win_get_cursor(0)[1],
-			lines = vim.api.nvim_buf_get_lines(0, 0, -1, false),
-		}
+		local snapshot = current_buffer_snapshot()
 		pre_flow_action()
 		require("nvim-flow").run_here(snapshot)
 	end
@@ -93,11 +136,15 @@ local function setup_keymaps()
 			return
 		end
 
-		-- One keymap, context-aware: inside a `.flow.yml` buffer it runs the
-		-- entry under the cursor; anywhere else it runs the flow resolved for
-		-- the current file.
+		-- One keymap, context-aware: inside a flow config or Markdown buffer it
+		-- runs the entry or shell block under the cursor.
 		vim.keymap.set("n", keymaps.run, function()
-			if is_flow_config_buffer(vim.api.nvim_get_current_buf()) then
+			local bufnr = vim.api.nvim_get_current_buf()
+			local snapshot = {
+				name = vim.api.nvim_buf_get_name(bufnr),
+				filetype = vim.bo[bufnr].filetype,
+			}
+			if is_cursor_run_snapshot(snapshot) then
 				run_here_from_current()
 			else
 				pre_flow_action()
@@ -124,8 +171,10 @@ local function setup_keymaps()
 
 	if keymaps.debug then
 		vim.keymap.set("n", keymaps.debug, function()
+			local snapshot = current_buffer_snapshot()
+			local markdown_buffer = is_markdown_snapshot(snapshot)
 			pre_flow_action()
-			require("nvim-flow").debug()
+			require("nvim-flow").debug(markdown_buffer and snapshot or nil)
 		end, { silent = true, desc = "Flow debug" })
 	end
 
@@ -159,12 +208,7 @@ function M.setup(opts)
 	setup_keymaps()
 end
 
-function M.run()
-	local cmd_def = resolve_cmd_def()
-	if not cmd_def then
-		return
-	end
-
+local function execute_cmd_def(cmd_def)
 	if cmd_def.runner == "debug" then
 		debug_runner.run(cmd_def)
 		return
@@ -176,67 +220,107 @@ function M.run()
 	end
 end
 
---- Run the flow entry the cursor sits in, directly from a `.flow.yml` buffer.
---- `snapshot` (optional) captures the buffer/cursor before pre-flow actions so
---- resolution is unaffected by window changes.
+function M.run()
+	local cmd_def = resolve_cmd_def()
+	if not cmd_def then
+		return
+	end
+
+	execute_cmd_def(cmd_def)
+end
+
+local function resolve_cursor_cmd_def(snapshot)
+	local name = snapshot.name or ""
+	if name == "" then
+		return nil, "current buffer has no file path"
+	end
+
+	if is_flow_config_name(name) then
+		local key = config.find_key_at_line(snapshot.lines, snapshot.lnum)
+		if not key then
+			return nil, "cursor is not on a flow entry"
+		end
+		return config.resolve_at(vim.fs.normalize(name), key, state.opts, table.concat(snapshot.lines, "\n"))
+	end
+
+	if is_markdown_snapshot(snapshot) then
+		return markdown.resolve_at(vim.fs.normalize(name), snapshot.lines, snapshot.lnum)
+	end
+
+	return nil,
+		("run here only works inside a `%s` buffer or a Markdown file"):format(state.opts.config_file or ".flow.yml")
+end
+
+local function resolve_action_cmd_def(snapshot)
+	if not is_markdown_snapshot(snapshot) then
+		return resolve_cmd_def()
+	end
+	if not snapshot.name or snapshot.name == "" then
+		return nil, "current buffer has no file path"
+	end
+	return markdown.resolve_at(vim.fs.normalize(snapshot.name), snapshot.lines, snapshot.lnum)
+end
+
+--- Run the flow entry or shell block under the cursor.
+--- `snapshot` (optional) preserves cursor and buffer contents across pre-run actions.
 function M.run_here(snapshot)
-	local buf = snapshot and snapshot.buf or vim.api.nvim_get_current_buf()
-	local name = snapshot and snapshot.name or vim.api.nvim_buf_get_name(buf)
-	if not name or name == "" then
+	local current, snapshot_err = normalize_snapshot(snapshot)
+	if not current then
+		notify(snapshot_err, vim.log.levels.ERROR)
+		return
+	end
+
+	if not current.name or current.name == "" then
 		notify("current buffer has no file path", vim.log.levels.WARN)
 		return
 	end
 
-	local config_file = state.opts.config_file or ".flow.yml"
-	if vim.fs.basename(name) ~= config_file then
-		notify(("run here only works inside a `%s` buffer"):format(config_file), vim.log.levels.WARN)
+	if not is_flow_config_name(current.name or "") and not is_markdown_snapshot(current) then
+		notify(
+			("run here only works inside a `%s` buffer"):format(state.opts.config_file or ".flow.yml"),
+			vim.log.levels.WARN
+		)
 		return
 	end
 
-	local lines = snapshot and snapshot.lines
-	if not lines then
-		if not vim.api.nvim_buf_is_valid(buf) then
-			notify("flow config buffer is no longer available", vim.log.levels.WARN)
-			return
-		end
-		lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-	end
-	local lnum = snapshot and snapshot.lnum or vim.api.nvim_win_get_cursor(0)[1]
-
-	local key = config.find_key_at_line(lines, lnum)
-	if not key then
-		notify("cursor is not on a flow entry", vim.log.levels.WARN)
-		return
-	end
-
-	local cmd_def, err = config.resolve_at(vim.fs.normalize(name), key, state.opts, table.concat(lines, "\n"))
+	local cmd_def, err = resolve_cursor_cmd_def(current)
 	if not cmd_def then
 		notify(err, vim.log.levels.ERROR)
 		return
 	end
 
-	if cmd_def.runner == "debug" then
-		debug_runner.run(cmd_def)
+	execute_cmd_def(cmd_def)
+end
+
+function M.debug(snapshot)
+	local current, snapshot_err = normalize_snapshot(snapshot)
+	if not current then
+		notify(snapshot_err, vim.log.levels.ERROR)
 		return
 	end
 
-	local ok, run_err = runner.run(cmd_def, state.opts)
-	if not ok then
-		notify(run_err, vim.log.levels.ERROR)
-	end
-end
-
-function M.debug()
-	local cmd_def = resolve_cmd_def()
+	local cmd_def, err = resolve_action_cmd_def(current)
 	if not cmd_def then
+		if err then
+			notify(err, vim.log.levels.ERROR)
+		end
 		return
 	end
 	debug_runner.run(cmd_def)
 end
 
-function M.preview()
-	local cmd_def = resolve_cmd_def()
+function M.preview(snapshot)
+	local current, snapshot_err = normalize_snapshot(snapshot)
+	if not current then
+		notify(snapshot_err, vim.log.levels.ERROR)
+		return
+	end
+
+	local cmd_def, err = resolve_action_cmd_def(current)
 	if not cmd_def then
+		if err then
+			notify(err, vim.log.levels.ERROR)
+		end
 		return
 	end
 	preview.open(runner.display_command(cmd_def.cmd), { title = "Flow Preview (" .. cmd_def.source_key .. ")" })
