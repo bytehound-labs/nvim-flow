@@ -58,6 +58,15 @@ describe("nvim-flow path helpers", function()
 		assert.are.equal(vim.fs.normalize(nested_repo), path.detect_repo_root(nested_repo .. "/src/main.lua"))
 	end)
 
+	it("identifies POSIX and Windows absolute paths", function()
+		assert.is_true(path.is_absolute("/tmp/project/file.lua"))
+		assert.is_true(path.is_absolute("C:\\project\\file.lua"))
+		assert.is_true(path.is_absolute("\\\\server\\share\\file.lua"))
+		assert.is_false(path.is_absolute("packages/project/file.lua"))
+		assert.is_false(path.is_absolute("C:project\\file.lua"))
+		assert.is_false(path.is_absolute(nil))
+	end)
+
 	it("resolves repo, non-repo, and Neovim cwd policies", function()
 		local repo = root .. "/project"
 		local nested = repo .. "/docs/guide.md"

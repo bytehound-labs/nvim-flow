@@ -17,6 +17,21 @@ function M.to_absolute(path)
 	return M.normalize(path)
 end
 
+function M.is_absolute(filepath)
+	if type(filepath) ~= "string" or filepath == "" then
+		return false
+	end
+
+	local first = filepath:sub(1, 1)
+	if first == "/" or first == "\\" then
+		return true
+	end
+
+	local drive_prefix = filepath:match("^%a:")
+	local separator = filepath:sub(3, 3)
+	return drive_prefix ~= nil and (separator == "/" or separator == "\\")
+end
+
 function M.split_filename(basename)
 	local filename, ext = basename:match("^(.*)%.([^%.]+)$")
 	if not filename then
@@ -82,7 +97,7 @@ function M.resolve_cwd_override(override, base)
 	end
 
 	local absolute
-	if vim.fn.isabsolutepath(override) == 1 then
+	if M.is_absolute(override) then
 		absolute = vim.fs.normalize(override)
 	else
 		absolute = vim.fs.normalize(base .. "/" .. override)

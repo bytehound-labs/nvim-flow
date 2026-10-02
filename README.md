@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-3xfMlujwtmZHPqo5ipJe7C.gif)
+![](https://vhs.charm.sh/vhs-3ucwDD39hmS2t4hYEtG7b4.gif)
 
 ## Motivation
 
@@ -180,7 +180,7 @@ Entries whose `cmd` and `cwd` use no file-scoped template variables (`{{filepath
 1. the locked file, if one is set (`:FlowSet` / `:FlowToggleLock`)
 2. otherwise the entry's `match`/key path patterns are globbed under the repo root (or config directory outside Git), requiring exactly one match
 
-If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed. Commands run from the nearest Git root for that context by default. An entry's optional `cwd` overrides the execution directory; relative paths are resolved from the selected default directory, absolute paths are used directly, and template variables are expanded. The target must be an existing directory.
+If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed. Commands run from the nearest Git root for that context by default. An entry's optional `cwd` overrides the execution directory; relative paths are resolved from the selected default directory, POSIX or Windows absolute paths are used directly, and template variables are expanded. The target must be an existing directory.
 
 ```yaml
 compare-prosafe-pou:

@@ -23,9 +23,12 @@ describe("nvim-flow quickfix parser", function()
 			"    run()",
 			'  File "/tmp/shared.py", line 3, in run',
 			"    raise ValueError('boom')",
+			'  File "C:\\shared\\module.py", line 7, in run',
+			"    return value",
 		}, "/tmp/project")
 
 		assert.are.equal("/tmp/project/src/main.py", items[1].filename)
 		assert.are.equal("/tmp/shared.py", items[2].filename)
+		assert.are.equal("C:\\shared\\module.py", items[3].filename)
 	end)
 end)

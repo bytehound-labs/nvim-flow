@@ -1,7 +1,8 @@
 local M = {}
+local path = require("nvim-flow.path")
 
 local function resolve_filename(filename, cwd)
-	if not cwd or vim.fn.isabsolutepath(filename) == 1 then
+	if not cwd or path.is_absolute(filename) then
 		return filename
 	end
 	return vim.fs.normalize(cwd .. "/" .. filename)
