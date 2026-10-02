@@ -468,6 +468,7 @@ local function run_buffer(cmd_def, opts)
 	local job = vim.fn.jobstart(script_path, {
 		env = env,
 		pty = true,
+		cwd = cmd_def.cwd,
 		width = vim.api.nvim_win_get_width(buf_win),
 		height = vim.api.nvim_win_get_height(buf_win),
 		on_stdout = on_output,
@@ -545,6 +546,7 @@ function M.run(cmd_def, opts)
 
 	vim.api.nvim_set_current_win(term_win)
 	local job = vim.fn.termopen(script_path, {
+		cwd = cmd_def.cwd,
 		on_exit = function()
 			vim.schedule(function()
 				-- Only capture if this terminal is still the active one

@@ -266,6 +266,92 @@ sync.yaml:
 		assert.are.equal(repo .. "/.flow.yml", location.file)
 		assert.are.equal(4, location.line)
 	end)
+
+	it("uses the nearest repository root as the execution directory", function()
+		local repo = root .. "/repo"
+		local nested_repo = repo .. "/packages/service"
+		local target = nested_repo .. "/src/main.py"
+		write_file(nested_repo .. "/.git/HEAD", "ref: refs/heads/main\n")
+		write_file(target, "print('hello')\n")
+		write_file(nested_repo .. "/.flow.yml", "py:\n  cmd: python {{filepath}}\n")
+
+		local cmd_def = assert(config.resolve(target))
+		assert.are.equal(vim.fs.normalize(nested_repo), cmd_def.cwd)
+	end)
+
+	it("falls back to the context file directory outside a repository", function()
+		local target = root .. "/outside/notes.md"
+		write_file(target, "# Notes\n")
+		write_file(root .. "/outside/.flow.yml", "md:\n  cmd: echo notes\n")
+
+		local cmd_def = assert(config.resolve(target))
+		assert.are.equal(vim.fs.normalize(root .. "/outside"), cmd_def.cwd)
+	end)
+
+	it("uses the captured Neovim directory when requested", function()
+		local repo = root .. "/repo"
+		local target = repo .. "/README.md"
+		write_file(repo .. "/.git/HEAD", "ref: refs/heads/main\n")
+		write_file(target, "# Readme\n")
+		write_file(repo .. "/.flow.yml", "md:\n  cmd: echo run\n")
+		local expected = vim.fs.normalize(vim.fn.getcwd())
+
+		local cmd_def = assert(config.resolve(target, { cwd = "nvim" }))
+		assert.are.equal(expected, cmd_def.cwd)
+	end)
+
+	it("resolves YAML cwd overrides relative to the repo and expands templates", function()
+		local repo = root .. "/repo"
+		local target_dir = repo .. "/packages/api service"
+		local flow_file = repo .. "/.flow.yml"
+		vim.fn.mkdir(repo .. "/.git", "p")
+		vim.fn.mkdir(target_dir, "p")
+		write_file(flow_file, "relative:\n  cwd: packages/api service\n  cmd: pwd\n")
+
+		local relative = assert(config.resolve_at(flow_file, "relative"))
+		assert.are.equal(vim.fs.normalize(target_dir), relative.cwd)
+
+		local templated =
+			assert(config.resolve_at(flow_file, "relative", {}, "relative:\n  cwd: '{{dir}}'\n  cmd: pwd\n"))
+		assert.are.equal(vim.fs.normalize(repo), templated.cwd)
+	end)
+
+	it("resolves a YAML cwd placeholder against the matched file context", function()
+		local repo = root .. "/repo"
+		local target = repo .. "/src/app.py"
+		local target_cwd = repo .. "/src/app-cwd"
+		local flow_file = repo .. "/.flow.yml"
+		write_file(repo .. "/.git/HEAD", "ref: refs/heads/main\n")
+		write_file(target, "print('hello')\n")
+		vim.fn.mkdir(target_cwd, "p")
+		write_file(
+			flow_file,
+			"run-app:\n  match: ['**/app.py']\n  cwd: '{{dir}}/{{filename}}-cwd'\n  cmd: echo no file placeholder\n"
+		)
+
+		local cmd_def = assert(config.resolve_at(flow_file, "run-app"))
+		assert.are.equal(vim.fs.normalize(target_cwd), cmd_def.cwd)
+	end)
+
+	it("rejects invalid cwd policies and YAML overrides", function()
+		local repo = root .. "/repo"
+		local flow_file = repo .. "/.flow.yml"
+		vim.fn.mkdir(repo .. "/.git", "p")
+
+		local invalid_policy, policy_err =
+			config.resolve_at(flow_file, "run", { cwd = "outside" }, "run:\n  cmd: echo run\n")
+		assert.is_nil(invalid_policy)
+		assert.is_true(policy_err:find("invalid cwd policy", 1, true) ~= nil)
+
+		local invalid_type, type_err = config.resolve_at(flow_file, "run", {}, "run:\n  cwd: 42\n  cmd: echo run\n")
+		assert.is_nil(invalid_type)
+		assert.is_true(type_err:find("cwd must be a non-empty directory path", 1, true) ~= nil)
+
+		local missing_dir, missing_err =
+			config.resolve_at(flow_file, "run", {}, "run:\n  cwd: missing\n  cmd: echo run\n")
+		assert.is_nil(missing_dir)
+		assert.is_true(missing_err:find("not an existing directory", 1, true) ~= nil)
+	end)
 end)
 
 describe("nvim-flow find_key_at_line", function()
@@ -330,6 +416,7 @@ describe("nvim-flow resolve_at (run from .flow.yml)", function()
 		local cmd_def = assert(config.resolve_at(flow_file, "deploy", { config_file = ".flow.yml" }))
 		assert.are.equal("deploy", cmd_def.source_key)
 		assert.is_true(contains(cmd_def.cmd, "echo deploy proj proj"))
+		assert.are.equal(vim.fs.normalize(root .. "/proj"), cmd_def.cwd)
 	end)
 
 	it("fills {{filepath}} from a match glob that resolves to exactly one file", function()

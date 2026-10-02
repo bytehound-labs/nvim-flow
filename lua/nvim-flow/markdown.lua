@@ -317,7 +317,7 @@ function M.extract_block(lines, lnum)
 	}
 end
 
-function M.resolve_at(filepath, lines, lnum)
+function M.resolve_at(filepath, lines, lnum, opts)
 	if type(filepath) ~= "string" or filepath == "" then
 		return nil, "current buffer has no file path"
 	end
@@ -340,7 +340,7 @@ function M.resolve_at(filepath, lines, lnum)
 
 	local ctx = path.build_context(context_path)
 	local source_key = ("%s:%d"):format(vim.fs.basename(filepath), block.line)
-	local cmd_def, normalize_err = config.normalize_cmd_def(source_key, { cmd = block.command }, ctx)
+	local cmd_def, normalize_err = config.normalize_cmd_def(source_key, { cmd = block.command }, ctx, opts)
 	if not cmd_def then
 		return nil, normalize_err
 	end

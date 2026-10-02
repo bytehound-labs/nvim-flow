@@ -16,4 +16,16 @@ describe("nvim-flow quickfix parser", function()
 		assert.are.equal(12, items[1].lnum)
 		assert.are.equal("run()", items[1].text)
 	end)
+
+	it("resolves relative traceback filenames against the command cwd", function()
+		local items = quickfix.parse_python_traceback({
+			'  File "src/main.py", line 12, in <module>',
+			"    run()",
+			'  File "/tmp/shared.py", line 3, in run',
+			"    raise ValueError('boom')",
+		}, "/tmp/project")
+
+		assert.are.equal("/tmp/project/src/main.py", items[1].filename)
+		assert.are.equal("/tmp/shared.py", items[2].filename)
+	end)
 end)

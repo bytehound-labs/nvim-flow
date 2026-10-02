@@ -120,6 +120,7 @@ local function build_adapter_config(parsed, cmd_def)
 			type = "python",
 			request = "launch",
 			console = "integratedTerminal",
+			cwd = cmd_def.cwd,
 			pythonPath = function()
 				return find_venv_python(cmd_def.filepath)
 			end,
@@ -141,6 +142,7 @@ local function build_adapter_config(parsed, cmd_def)
 			type = "node",
 			request = "launch",
 			console = "integratedTerminal",
+			cwd = cmd_def.cwd,
 			program = parsed.program,
 		}
 		if #parsed.args > 0 then

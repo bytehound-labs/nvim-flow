@@ -37,6 +37,7 @@ describe("nvim-flow Markdown resolution", function()
 		assert.are.equal("README.md:3", cmd_def.source_key)
 		assert.are.equal("#!/usr/bin/env bash\necho hello", cmd_def.cmd)
 		assert.are.equal(vim.fs.normalize(document), cmd_def.filepath)
+		assert.are.equal(vim.fs.normalize(root .. "/project"), cmd_def.cwd)
 		assert.are.same({ vim.fs.normalize(document) }, cmd_def.source_files)
 		assert.are.equal(3, cmd_def.block_line)
 	end)
@@ -181,6 +182,25 @@ describe("nvim-flow Markdown resolution", function()
 		assert.is_true(cmd_def.cmd:find("main py " .. root .. "/project/src project", 1, true) ~= nil)
 		assert.are.equal(vim.fs.normalize(target), cmd_def.filepath)
 		assert.are.same({ vim.fs.normalize(document) }, cmd_def.source_files)
+	end)
+
+	it("uses a locked target's repository for cursor recipes with file placeholders", function()
+		local target_repo = root .. "/target-repo"
+		local target = target_repo .. "/src/main.py"
+		vim.fn.mkdir(target_repo .. "/.git", "p")
+		vim.fn.mkdir(vim.fs.dirname(target), "p")
+		lock.set(target)
+
+		local cmd_def =
+			assert(markdown.resolve_at(document, lines("```sh\necho {{filepath}}\n```"), 2, { cwd = "repo" }))
+
+		assert.are.equal(vim.fs.normalize(target_repo), cmd_def.cwd)
+	end)
+
+	it("uses the Neovim cwd policy for Markdown blocks", function()
+		local expected = vim.fs.normalize(vim.fn.getcwd())
+		local cmd_def = assert(markdown.resolve_at(document, lines("```sh\necho run\n```"), 2, { cwd = "nvim" }))
+		assert.are.equal(expected, cmd_def.cwd)
 	end)
 
 	it("preserves an explicit shell shebang", function()

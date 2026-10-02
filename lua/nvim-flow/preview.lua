@@ -20,6 +20,11 @@ end
 function M.open(command, opts)
 	opts = opts or {}
 	local lines = split_lines(command)
+	if opts.cwd and opts.cwd ~= "" then
+		local with_cwd = { "Working directory: " .. opts.cwd, "" }
+		vim.list_extend(with_cwd, lines)
+		lines = with_cwd
+	end
 
 	local width = 40
 	for _, line in ipairs(lines) do

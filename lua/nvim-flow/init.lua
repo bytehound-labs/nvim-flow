@@ -10,6 +10,7 @@ local M = {}
 
 local defaults = {
 	config_file = ".flow.yml",
+	cwd = "repo",
 	terminal_height = 15,
 	terminal_position = "top",
 	output_mode = "buffer",
@@ -204,6 +205,9 @@ local function setup_keymaps()
 end
 
 function M.setup(opts)
+	if opts and opts.cwd ~= nil and opts.cwd ~= "repo" and opts.cwd ~= "nvim" then
+		error(("nvim-flow: invalid cwd policy `%s`; expected `repo` or `nvim`"):format(tostring(opts.cwd)))
+	end
 	state.opts = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
 	setup_keymaps()
 end
@@ -244,7 +248,7 @@ local function resolve_cursor_cmd_def(snapshot)
 	end
 
 	if is_markdown_snapshot(snapshot) then
-		return markdown.resolve_at(vim.fs.normalize(name), snapshot.lines, snapshot.lnum)
+		return markdown.resolve_at(vim.fs.normalize(name), snapshot.lines, snapshot.lnum, state.opts)
 	end
 
 	return nil,
@@ -258,7 +262,7 @@ local function resolve_action_cmd_def(snapshot)
 	if not snapshot.name or snapshot.name == "" then
 		return nil, "current buffer has no file path"
 	end
-	return markdown.resolve_at(vim.fs.normalize(snapshot.name), snapshot.lines, snapshot.lnum)
+	return markdown.resolve_at(vim.fs.normalize(snapshot.name), snapshot.lines, snapshot.lnum, state.opts)
 end
 
 --- Run the flow entry or shell block under the cursor.
@@ -323,7 +327,10 @@ function M.preview(snapshot)
 		end
 		return
 	end
-	preview.open(runner.display_command(cmd_def.cmd), { title = "Flow Preview (" .. cmd_def.source_key .. ")" })
+	preview.open(runner.display_command(cmd_def.cmd), {
+		title = "Flow Preview (" .. cmd_def.source_key .. ")",
+		cwd = cmd_def.cwd,
+	})
 end
 
 function M.edit()
@@ -358,7 +365,8 @@ function M.quickfix()
 		return
 	end
 
-	local ok, err = quickfix.populate_python(lines, "nvim-flow traceback")
+	local cwd = runner.last_cmd_def and runner.last_cmd_def.cwd or nil
+	local ok, err = quickfix.populate_python(lines, "nvim-flow traceback", cwd)
 	if not ok then
 		notify(err, vim.log.levels.WARN)
 		return

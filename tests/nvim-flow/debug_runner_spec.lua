@@ -19,12 +19,14 @@ describe("nvim-flow debug runner", function()
 		local ok = debug_runner.run({
 			cmd = "#!/usr/bin/env bash\npython /tmp/example.py --name value",
 			filepath = "/tmp/example.py",
+			cwd = "/tmp",
 		})
 
 		assert.is_true(ok)
 		local cfg = package.loaded.dap.configurations[vim.bo.filetype][1]
 		assert.are.equal("python", cfg.type)
 		assert.are.equal("/tmp/example.py", cfg.program)
+		assert.are.equal("/tmp", cfg.cwd)
 		assert.are.same({ "--name", "value" }, cfg.args)
 	end)
 
@@ -32,12 +34,14 @@ describe("nvim-flow debug runner", function()
 		local ok = debug_runner.run({
 			cmd = "#!/usr/bin/env bash\nuv run -m app.main --foo bar",
 			filepath = "/tmp/example.py",
+			cwd = "/tmp",
 		})
 
 		assert.is_true(ok)
 		local cfg = package.loaded.dap.configurations[vim.bo.filetype][1]
 		assert.are.equal("python", cfg.type)
 		assert.are.equal("app.main", cfg.module)
+		assert.are.equal("/tmp", cfg.cwd)
 		assert.are.same({ "--foo", "bar" }, cfg.args)
 	end)
 
@@ -45,12 +49,14 @@ describe("nvim-flow debug runner", function()
 		local ok = debug_runner.run({
 			cmd = '#!/usr/bin/env bash\npython "/tmp/example.py" --name value',
 			filepath = "/tmp/example.py",
+			cwd = "/tmp",
 		})
 
 		assert.is_true(ok)
 		local cfg = package.loaded.dap.configurations[vim.bo.filetype][1]
 		assert.are.equal("python", cfg.type)
 		assert.are.equal("/tmp/example.py", cfg.program)
+		assert.are.equal("/tmp", cfg.cwd)
 		assert.are.same({ "--name", "value" }, cfg.args)
 	end)
 
@@ -72,5 +78,18 @@ describe("nvim-flow debug runner", function()
 		assert.is_true(continued)
 		-- Existing config should be preserved (not replaced)
 		assert.are.equal("netcoredbg", package.loaded.dap.configurations.cs[1].type)
+	end)
+
+	it("sets the resolved cwd on generated Node configurations", function()
+		local ok = debug_runner.run({
+			cmd = "#!/usr/bin/env bash\nnode scripts/check.js",
+			filepath = "/tmp/scripts/check.js",
+			cwd = "/tmp/project",
+		})
+
+		assert.is_true(ok)
+		local cfg = package.loaded.dap.configurations[vim.bo.filetype][1]
+		assert.are.equal("node", cfg.type)
+		assert.are.equal("/tmp/project", cfg.cwd)
 	end)
 end)

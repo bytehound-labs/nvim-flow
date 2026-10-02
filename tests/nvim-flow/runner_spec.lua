@@ -38,6 +38,41 @@ describe("nvim-flow runner", function()
 		assert.are.equal(1, vim.b[runner.last_terminal_buf].nvim_flow_terminal)
 	end)
 
+	it("runs from the resolved working directory without changing Neovim's directory", function()
+		local execution_dir = root .. "/project with spaces"
+		vim.fn.mkdir(execution_dir, "p")
+		vim.cmd("edit " .. vim.fn.fnameescape(target))
+		local nvim_cwd = vim.fs.normalize(vim.fn.getcwd())
+		local expected = vim.fs.normalize(execution_dir)
+
+		for _, output_mode in ipairs({ "buffer", "terminal" }) do
+			local ok, err = runner.run({
+				cmd = "#!/usr/bin/env bash\npwd",
+				filepath = target,
+				cwd = execution_dir,
+				runner = "terminal",
+			}, {
+				output_mode = output_mode,
+				terminal_height = 5,
+				show_command = false,
+			})
+
+			assert.is_true(ok, err)
+			local completed = vim.wait(5000, function()
+				for _, line in ipairs(runner.last_output_lines) do
+					if vim.fs.normalize(line) == expected then
+						return true
+					end
+				end
+				return false
+			end, 25)
+			assert.is_true(completed, "expected process to run in " .. expected)
+			assert.are.equal(nvim_cwd, vim.fs.normalize(vim.fn.getcwd()))
+			vim.cmd("silent! only")
+			vim.cmd("edit " .. vim.fn.fnameescape(target))
+		end
+	end)
+
 	it("opens terminal above source by default and below when configured", function()
 		vim.cmd("edit " .. vim.fn.fnameescape(target))
 		local source_win = vim.api.nvim_get_current_win()

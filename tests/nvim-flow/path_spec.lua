@@ -32,4 +32,59 @@ describe("nvim-flow path helpers", function()
 		assert.is_true(ok)
 		assert.are.equal("my-repo", detected)
 	end)
+
+	it("detects directory and worktree-style git markers", function()
+		local repo = root .. "/repo"
+		local nested = repo .. "/packages/api"
+		local target = nested .. "/README.md"
+		vim.fn.mkdir(nested, "p")
+		local git_file = assert(io.open(repo .. "/.git", "w"))
+		git_file:write("gitdir: /tmp/worktrees/repo\n")
+		git_file:close()
+
+		assert.are.equal(vim.fs.normalize(repo), path.detect_repo_root(target))
+
+		local original_root = vim.fs.root
+		vim.fs.root = nil
+		local ok, detected = pcall(path.detect_repo_root, target)
+		vim.fs.root = original_root
+		assert.is_true(ok)
+		assert.are.equal(vim.fs.normalize(repo), detected)
+
+		vim.fn.delete(repo .. "/.git")
+		vim.fn.mkdir(repo .. "/.git", "p")
+		local nested_repo = nested .. "/subpackage"
+		vim.fn.mkdir(nested_repo .. "/.git", "p")
+		assert.are.equal(vim.fs.normalize(nested_repo), path.detect_repo_root(nested_repo .. "/src/main.lua"))
+	end)
+
+	it("resolves repo, non-repo, and Neovim cwd policies", function()
+		local repo = root .. "/project"
+		local nested = repo .. "/docs/guide.md"
+		vim.fn.mkdir(repo .. "/.git", "p")
+		vim.fn.mkdir(repo .. "/docs", "p")
+		local outside = root .. "/outside/notes.md"
+		vim.fn.mkdir(vim.fs.dirname(outside), "p")
+
+		assert.are.equal(vim.fs.normalize(repo), path.resolve_execution_cwd(nested, "repo"))
+		assert.are.equal(vim.fs.normalize(vim.fs.dirname(outside)), path.resolve_execution_cwd(outside, "repo"))
+		assert.are.equal(vim.fs.normalize(vim.fn.getcwd()), path.resolve_execution_cwd(nested, "nvim"))
+
+		local cwd, err = path.resolve_execution_cwd(nested, "unknown")
+		assert.is_nil(cwd)
+		assert.is_true(err:find("invalid cwd policy", 1, true) ~= nil)
+	end)
+
+	it("resolves explicit cwd paths relative to their base and validates directories", function()
+		local base = root .. "/project"
+		local nested = base .. "/packages/api service"
+		vim.fn.mkdir(nested, "p")
+
+		assert.are.equal(vim.fs.normalize(nested), path.resolve_cwd_override("packages/api service", base))
+		assert.are.equal(vim.fs.normalize(nested), path.resolve_cwd_override(nested, base))
+
+		local missing, err = path.resolve_cwd_override("missing", base)
+		assert.is_nil(missing)
+		assert.is_true(err:find("not an existing directory", 1, true) ~= nil)
+	end)
 end)

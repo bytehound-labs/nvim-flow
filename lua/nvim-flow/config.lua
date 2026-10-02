@@ -393,7 +393,7 @@ local function normalize_runner(runner)
 	return nil
 end
 
-function M.normalize_cmd_def(key, entry, ctx)
+function M.normalize_cmd_def(key, entry, ctx, opts)
 	if type(entry) ~= "table" then
 		return nil, ("invalid entry for key `%s`"):format(key)
 	end
@@ -402,20 +402,37 @@ function M.normalize_cmd_def(key, entry, ctx)
 		return nil, ("entry `%s` must define a string `cmd`"):format(key)
 	end
 
+	local cwd, cwd_err = path.resolve_execution_cwd(ctx.filepath, opts and opts.cwd)
+	if not cwd then
+		return nil, cwd_err
+	end
+
 	local cmd_def = vim.deepcopy(entry)
 	cmd_def.runner = normalize_runner(cmd_def.runner)
 	if not cmd_def.runner then
 		return nil, ("invalid runner for `%s`; expected one of: vim, terminal, debug"):format(key)
 	end
 
-	cmd_def.cmd = template.expand(cmd_def.cmd, {
+	local vars = {
 		filepath = ctx.filepath,
 		dir = ctx.dir,
 		filename = ctx.filename,
 		ext = ctx.ext,
 		repo = ctx.repo,
 		folder = ctx.folder,
-	})
+	}
+	cmd_def.cmd = template.expand(cmd_def.cmd, vars)
+
+	if cmd_def.cwd ~= nil then
+		if type(cmd_def.cwd) ~= "string" or cmd_def.cwd == "" then
+			return nil, ("entry `%s` cwd must be a non-empty directory path"):format(key)
+		end
+		cwd, cwd_err = path.resolve_cwd_override(template.expand(cmd_def.cwd, vars), cwd)
+		if not cwd then
+			return nil, ("invalid cwd for entry `%s`: %s"):format(key, cwd_err)
+		end
+	end
+	cmd_def.cwd = cwd
 
 	if not cmd_def.cmd:match("^#!") then
 		cmd_def.cmd = "#!/usr/bin/env bash\n" .. cmd_def.cmd
@@ -439,7 +456,7 @@ function M.resolve(filepath, opts)
 		return nil, ("No matching flow definition found in `%s`"):format(opts.config_file or ".flow.yml")
 	end
 
-	local cmd_def, normalize_err = M.normalize_cmd_def(key, entry, ctx)
+	local cmd_def, normalize_err = M.normalize_cmd_def(key, entry, ctx, opts)
 	if not cmd_def then
 		return nil, normalize_err
 	end
@@ -612,7 +629,7 @@ function M.resolve_at(flow_file, key, opts, text)
 	end
 
 	local ctx
-	if cmd_uses_file_scoped_var(entry.cmd) then
+	if cmd_uses_file_scoped_var(entry.cmd) or cmd_uses_file_scoped_var(entry.cwd) then
 		local file, file_err = resolve_entry_file(flow_file, key, entry)
 		if not file then
 			return nil, file_err
@@ -622,7 +639,7 @@ function M.resolve_at(flow_file, key, opts, text)
 		ctx = config_context(flow_file)
 	end
 
-	local cmd_def, normalize_err = M.normalize_cmd_def(key, entry, ctx)
+	local cmd_def, normalize_err = M.normalize_cmd_def(key, entry, ctx, opts)
 	if not cmd_def then
 		return nil, normalize_err
 	end

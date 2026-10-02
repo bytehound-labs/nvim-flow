@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-2maMBy9UvDLRYeFFn4uIUK.gif)
+![](https://vhs.charm.sh/vhs-3xfMlujwtmZHPqo5ipJe7C.gif)
 
 ## Motivation
 
@@ -75,6 +75,7 @@ return {
     cmd = { "FlowRun", "FlowRunHere", "FlowDebug", "FlowEdit", "FlowToggleLock", "FlowPreview", "FlowQuickfix" },
     opts = {
       config_file = ".flow.yml",
+      cwd = "repo", -- "repo" | "nvim"
       terminal_height = 15,
       terminal_position = "top",
       output_mode = "buffer",
@@ -123,6 +124,11 @@ require("nvim-flow").setup({
 
 - `config_file` (`string`, default: `".flow.yml"`)
   - Filename to search while walking directories upward.
+- `cwd` (`"repo" | "nvim"`, default: `"repo"`)
+  - `"repo"` runs in the nearest Git repository root for the command context;
+    outside a repository it uses the context file's directory.
+  - `"nvim"` captures Neovim's current working directory when the command is
+    resolved. Neither policy changes Neovim's own working directory.
 - `terminal_height` (`number`, default: `15`)
   - Height of the terminal split used by `FlowRun`.
 - `terminal_position` (`"top" | "bottom"`, default: `"top"`)
@@ -169,21 +175,22 @@ Sometimes you want to launch a flow without opening its source file. From inside
 
 The `run` keymap is context-aware: inside a `.flow.yml` buffer it runs the entry under the cursor, and inside a Markdown buffer it runs the shell fence under the cursor. Elsewhere it runs the flow resolved for the current file. A single mapping — for example `run = "<CR>"` — covers all three contexts.
 
-Entries that use no file-scoped template variables (`{{filepath}}`, `{{filename}}`, `{{ext}}`) run as-is — ideal for named, project-level tasks. When an entry _does_ use a file-scoped variable, nvim-flow resolves a single source file with this precedence:
+Entries whose `cmd` and `cwd` use no file-scoped template variables (`{{filepath}}`, `{{filename}}`, `{{ext}}`) run from the `.flow.yml` context — ideal for named, project-level tasks. When either field uses a file-scoped variable, nvim-flow resolves a single source file with this precedence:
 
 1. the locked file, if one is set (`:FlowSet` / `:FlowToggleLock`)
-2. otherwise the entry's `match`/key path patterns are globbed under the repo root, requiring exactly one match
+2. otherwise the entry's `match`/key path patterns are globbed under the repo root (or config directory outside Git), requiring exactly one match
 
-If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed.
+If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed. Commands run from the nearest Git root for that context by default. An entry's optional `cwd` overrides the execution directory; relative paths are resolved from the selected default directory, absolute paths are used directly, and template variables are expanded. The target must be an existing directory.
 
 ```yaml
 compare-prosafe-pou:
   match: ['**/compare/prosafe/pou.py']
+  cwd: .
   cmd: |
     uv run yok compare prosafe pou /mnt/nas /mnt/hp --controller SCS0130 --detail
 ```
 
-Running `:FlowRunHere` anywhere in this block executes the command directly. Because it uses no file-scoped variables, no source file is resolved.
+Running `:FlowRunHere` anywhere in this block executes the command directly. The path-like `match` alone does not resolve a target; add a file-scoped variable to `cmd` or `cwd`, or set a lock, if the command needs one.
 
 ## Run from Markdown
 
@@ -193,7 +200,6 @@ Open a `.md` or `.markdown` file and place the cursor anywhere inside a closed `
 # Project checks
 
 ```bash
-cd "{{dir}}"
 printf 'Running checks for {{repo}}\n'
 ```
 ````
@@ -202,13 +208,13 @@ Shell fence labels select executable blocks; they do not change the interpreter.
 
 Markdown execution requires the Tree-sitter `markdown` parser to be available on Neovim's runtime path. Install the parser with `nvim-treesitter` or another parser installer; `nvim-flow` uses Neovim's built-in Tree-sitter API and does not require the `nvim-treesitter` plugin at runtime. YAML workflows continue to work without the Markdown parser. If the parser is missing, Markdown actions report an error instead of falling back to YAML.
 
-Project template variables such as `{{dir}}`, `{{repo}}`, and `{{folder}}` use the Markdown file's location unless the command also uses file-scoped variables, in which case all variables use the locked target's context. File-scoped variables (`{{filepath}}`, `{{filename}}`, and `{{ext}}`) require a locked target file. Set one with `:FlowSet path/to/file` before running the block; without a lock, the command is rejected. The terminal runner inherits Neovim's working directory; use `cd "{{dir}}"` when it should run from the Markdown file's directory.
+The default execution directory is the nearest Git root for the Markdown context, or the Markdown file's directory when it is outside a Git repository. Project template variables such as `{{dir}}`, `{{repo}}`, and `{{folder}}` still refer to the Markdown file's location. If the block uses file-scoped variables (`{{filepath}}`, `{{filename}}`, or `{{ext}}`), set a target with `:FlowSet path/to/file`; the locked target supplies both template context and the repository root. Use an explicit shell `cd` for a one-block directory exception. To restore inherited Neovim-cwd behavior for all commands, configure `cwd = "nvim"`. The resolved directory is shown separately in `:FlowPreview`; no policy changes Neovim's working directory.
 
 Only `sh`, `bash`, and `shell` fences are executable. Unlabeled blocks, other languages, empty blocks, and fences without a closing delimiter are rejected. Opening a Markdown file never runs its contents, but running a shell fence executes its commands locally, so only run blocks from documents you trust.
 
 ## Debug integration (`nvim-dap`)
 
-For file-based commands, `FlowDebug` uses the same resolution pipeline as `FlowRun`, then parses the command to create a debug configuration for `nvim-dap` and calls `dap.continue()`. In a Markdown buffer, it instead uses the shell fence under the cursor.
+For file-based commands, `FlowDebug` uses the same resolution pipeline as `FlowRun`, then parses the command to create a debug configuration for `nvim-dap` and calls `dap.continue()`. Generated Python and Node configurations use the resolved execution directory. In a Markdown buffer, it instead uses the shell fence under the cursor.
 
 Supported command families include `python` / `python3`, `uv run ...` (including module mode), and `node`.
 
@@ -334,7 +340,7 @@ Flow output buffers are tagged so external cleanup/session logic can recognize a
 
 ## Quickfix behavior
 
-`FlowQuickfix` parses the **last** `FlowRun` terminal output and extracts Python traceback lines:
+`FlowQuickfix` parses the **last** `FlowRun` output and extracts Python traceback lines. Relative filenames are resolved against that command's working directory:
 
 `File "/path/file.py", line 42, in ...`
 

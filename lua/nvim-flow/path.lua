@@ -53,6 +53,48 @@ function M.detect_repo_name(filepath)
 	return ""
 end
 
+function M.resolve_execution_cwd(filepath, policy)
+	if policy == nil then
+		policy = "repo"
+	end
+	if policy ~= "repo" and policy ~= "nvim" then
+		return nil, ("invalid cwd policy `%s`; expected `repo` or `nvim`"):format(tostring(policy))
+	end
+
+	if policy == "nvim" then
+		local current = M.normalize(vim.fn.getcwd())
+		if not current then
+			return nil, "unable to determine Neovim's current working directory"
+		end
+		return current
+	end
+
+	local absolute = M.to_absolute(filepath)
+	if not absolute then
+		return nil, "cannot resolve a working directory without a file path"
+	end
+	return M.detect_repo_root(absolute) or vim.fs.dirname(absolute)
+end
+
+function M.resolve_cwd_override(override, base)
+	if type(override) ~= "string" or override == "" then
+		return nil, "cwd override must be a non-empty directory path"
+	end
+
+	local absolute
+	if vim.fn.isabsolutepath(override) == 1 then
+		absolute = vim.fs.normalize(override)
+	else
+		absolute = vim.fs.normalize(base .. "/" .. override)
+	end
+
+	local stat = uv.fs_stat(absolute)
+	if not stat or stat.type ~= "directory" then
+		return nil, ("cwd override is not an existing directory: %s"):format(absolute)
+	end
+	return absolute
+end
+
 function M.build_context(filepath)
 	local absolute = M.to_absolute(filepath)
 	local dir = vim.fs.dirname(absolute)

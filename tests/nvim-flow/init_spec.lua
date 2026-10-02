@@ -177,9 +177,56 @@ describe("nvim-flow run_here integration", function()
 		assert.is_not_nil(captured_preview)
 		assert.are.equal("echo selected", captured_preview.command)
 		assert.are.equal("Flow Preview (preview.md:2)", captured_preview.opts.title)
+		assert.are.equal(vim.fs.normalize(root), captured_preview.opts.cwd)
 		assert.is_not_nil(captured_debug)
 		assert.are.equal("#!/usr/bin/env bash\necho selected", captured_debug.cmd)
+		assert.are.equal(vim.fs.normalize(root), captured_debug.cwd)
 		assert.is_nil(runner.last_cmd_def)
+	end)
+
+	it("rejects unsupported global cwd policies", function()
+		assert.has_error(function()
+			flow.setup({ cwd = "relative/path" })
+		end, "nvim-flow: invalid cwd policy `relative/path`; expected `repo` or `nvim`")
+	end)
+
+	it("runs Markdown blocks from their repository root in both output modes", function()
+		local repo = root .. "/project"
+		local filepath = repo .. "/docs/README.md"
+		vim.fn.mkdir(repo .. "/.git", "p")
+		local original_nvim_cwd = vim.fs.normalize(vim.fn.getcwd())
+
+		for _, output_mode in ipairs({ "buffer", "terminal" }) do
+			vim.cmd("silent! only")
+			open_markdown(filepath, { "# Commands", "```sh", "pwd", "```" })
+			flow.setup({
+				output_mode = output_mode,
+				show_command = false,
+				terminal_height = 5,
+			})
+
+			flow.run_here()
+
+			assert.are.equal(vim.fs.normalize(repo), runner.last_cmd_def.cwd)
+			assert.is_true(wait_for_output(vim.fs.normalize(repo)))
+			assert.are.equal(original_nvim_cwd, vim.fs.normalize(vim.fn.getcwd()))
+		end
+	end)
+
+	it("uses the cwd from a cursor YAML entry when running it", function()
+		local repo = root .. "/yaml-project"
+		local execution_dir = repo .. "/packages/api"
+		local flow_file = repo .. "/.flow.yml"
+		vim.fn.mkdir(repo .. "/.git", "p")
+		vim.fn.mkdir(execution_dir, "p")
+		write_file(flow_file, "api:\n  cwd: packages/api\n  cmd: pwd\n")
+		vim.cmd("edit " .. vim.fn.fnameescape(flow_file))
+		vim.api.nvim_win_set_cursor(0, { 2, 0 })
+
+		flow.run_here()
+
+		assert.are.equal(vim.fs.normalize(execution_dir), runner.last_cmd_def.cwd)
+		assert.is_true(wait_for_output(vim.fs.normalize(execution_dir)))
 	end)
 
 	it("preserves the Markdown block snapshot across debug keymap cleanup", function()

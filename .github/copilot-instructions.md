@@ -41,6 +41,9 @@ It resolves commands from `.flow.yml` or a fenced shell block and runs them in a
 ## Config behavior (important)
 
 - Config file name defaults to `.flow.yml` (configurable).
+- Execution cwd defaults to the nearest Git root for the command context, or
+  the context file's directory outside Git. `setup({ cwd = "nvim" })` restores
+  inherited Neovim-cwd behavior without changing Neovim's own directory.
 - Discovery walks from current file's directory upward to `$HOME` (if `stop_at_home = true`).
 - All found files are merged.
 - Closer files take precedence over farther files.
@@ -63,9 +66,9 @@ It resolves commands from `.flow.yml` or a fenced shell block and runs them in a
 - `config.find_key_at_line(lines, lnum)` maps a cursor line to the enclosing top-level entry key (inverse of `find_top_level_key_line`).
 - `config.resolve_at(flow_file, key, opts, text)` resolves a `cmd_def` for a single entry, bypassing match resolution. Optional `text` (live buffer content) is honored over the file on disk.
 - `markdown.resolve_at(filepath, lines, lnum)` resolves a `sh`, `bash`, or `shell` fence from live Markdown lines, including fences inside lists and blockquotes.
-- File-scoped vars (`{{filepath}}`, `{{filename}}`, `{{ext}}`) resolve lazily: locked file first, else glob the entry's path-like `match`/key under the repo root and require exactly one file, else abort. Entries with no file-scoped vars run with the `.flow.yml`'s own dir/repo/folder context.
+- File-scoped vars (`{{filepath}}`, `{{filename}}`, `{{ext}}`) in `cmd` or `cwd` resolve lazily: locked file first, else glob the entry's path-like `match`/key under the repo root (or config directory outside Git) and require exactly one file, else abort. Entries with no file-scoped vars use the `.flow.yml`'s own dir/repo/folder context. A YAML entry may override cwd with an existing absolute or relative directory; relative paths use the default execution directory as their base, and template variables are expanded.
 - For Markdown blocks, project vars derive from the Markdown file; file-scoped vars require a lock and derive the full context from the locked target. No Markdown heading/glob target inference is performed.
-- `FlowRun` and `FlowEdit` remain YAML-resolved, including when the current file is Markdown. `FlowPreview` and `FlowDebug` resolve the current Markdown shell fence.
+- `FlowRun` and `FlowEdit` remain YAML-resolved, including when the current file is Markdown. Markdown commands default to the nearest Git root for the Markdown or locked-file context, falling back to the Markdown file's directory outside Git. `FlowPreview` shows the resolved cwd separately from the command; generated Python/Node debug configurations use the same cwd, and relative Python traceback paths resolve against the command cwd.
 - Markdown execution requires the Tree-sitter `markdown` parser on runtimepath, but YAML execution does not require Tree-sitter. The plugin uses Neovim's built-in parser API, not `nvim-treesitter`.
 - Coverage: `resolve_at`/`find_key_at_line` in `tests/nvim-flow/config_spec.lua`; Markdown extraction in `tests/nvim-flow/markdown_spec.lua`; cursor command glue in `tests/nvim-flow/init_spec.lua`.
 
@@ -75,7 +78,7 @@ It resolves commands from `.flow.yml` or a fenced shell block and runs them in a
 - A cursor on any line of a closed `sh`, `bash`, or `shell` fence (including its delimiters) selects that block. Language labels are case-insensitive; extra info-string text does not configure execution.
 - Tree-sitter identifies fenced blocks and container prefixes. Preserve shell contents and strip only parser-identified list/blockquote prefixes plus opening-fence indentation.
 - Reject unsupported or unlabeled blocks, prose cursor positions, empty bodies, and incomplete fences. Never fall back to YAML when a Markdown cursor action cannot resolve a block.
-- `FlowRunHere` and the `run` keymap use Bash by default, with an explicit first-line shebang override. Normal execution uses the configured output split and inherits Neovim's working directory; `FlowDebug` uses the debugger's execution context. Opening a document does not execute commands.
+- `FlowRunHere` and the `run` keymap use Bash by default, with an explicit first-line shebang override. Normal execution uses the configured output split and the resolved command cwd; `FlowDebug` uses the same cwd for supported generated Python/Node configurations. Opening a document does not execute commands.
 - Keep Markdown actions cursor-local; do not add task registries, whole-document execution, inline result insertion, or automatic execution without updating the feature scope and tests.
 
 ## Deterministic matching notes
@@ -87,7 +90,7 @@ It resolves commands from `.flow.yml` or a fenced shell block and runs them in a
 
 ## Template variables
 
-Supported command templates:
+Supported command templates (in `cmd` and YAML `cwd` overrides):
 
 - `{{filepath}}`
 - `{{dir}}`
