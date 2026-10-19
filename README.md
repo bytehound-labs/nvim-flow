@@ -15,7 +15,7 @@ demo.py:
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-3ucwDD39hmS2t4hYEtG7b4.gif)
+![](https://vhs.charm.sh/vhs-GX8orWnL50bsXDsBiwFpL.gif)
 
 ## Motivation
 

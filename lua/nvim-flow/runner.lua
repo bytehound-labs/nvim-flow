@@ -273,7 +273,7 @@ function M.prompt_buffer_input(bufnr)
 		return
 	end
 
-	vim.ui.input({ prompt = "flow input> " }, function(input)
+	vim.ui.input({ prompt = "Flow input" }, function(input)
 		if input == nil then
 			return
 		end
