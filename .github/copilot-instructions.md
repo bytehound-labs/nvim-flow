@@ -138,7 +138,7 @@ Markdown tests use a Tree-sitter `markdown` parser. CI builds `tree-sitter-markd
 3. Optional real-world config parse check (for local environment):
 
 ```bash
-nvim --headless -u tests/minimal_init.lua -c "lua local y=require('nvim-flow.yaml'); local files=vim.fn.glob('/home/mike/git/**/.flow.yml', false, true); table.insert(files, '/home/mike/.flow.yml'); for _,f in ipairs(files) do assert(y.decode_file(f), f) end" -c "qa"
+nvim --headless -u tests/minimal_init.lua -c "lua local y=require('nvim-flow.yaml'); local home=vim.fn.expand('~'); local files=vim.fn.glob(home .. '/git/**/.flow.yml', false, true); table.insert(files, home .. '/.flow.yml'); for _,f in ipairs(files) do assert(y.decode_file(f), f) end" -c "qa"
 ```
 
 ## Editing guidelines for contributors/LLMs
@@ -151,7 +151,7 @@ nvim --headless -u tests/minimal_init.lua -c "lua local y=require('nvim-flow.yam
 
 ## Known parser boundaries
 
-`yaml.lua` is intentionally lightweight and supports the project's real configs (maps, scalars, inline lists, block-style commands).
+`yaml.lua` is intentionally lightweight and supports the project's real configs (maps, scalars, inline lists, literal `|` blocks, and folded `>` blocks). Folded adjacent nonblank lines become spaces; blank lines preserve line breaks.
 If advanced YAML features are required (anchors/tags/complex collections), add tests first and then decide whether to extend parser or swap parser implementation.
 
 The upstream Tree-sitter Markdown grammar can have parsing inaccuracies. Validate exact extracted command text, nested prefixes, and closing-fence behavior against the pinned parser used in CI; do not claim complete CommonMark correctness.

@@ -10,12 +10,12 @@ Create a `.flow.yml` next to your project files:
 
 ```yaml
 demo.py:
-  cmd: python "{{filepath}}" --name mike
+  cmd: python "{{filepath}}" --name demo
 ```
 
 Open the file in Neovim and run `:FlowRun` or `:FlowDebug` — nvim-flow resolves the command for the current file and executes it in a split. In the default buffer mode, output is rendered in a normal Neovim buffer so narrow splits do not hard-wrap PTY output:
 
-![](https://vhs.charm.sh/vhs-GX8orWnL50bsXDsBiwFpL.gif)
+![](https://vhs.charm.sh/vhs-3dlC2CuJ6oskyeC7LlS11j.gif)
 
 ## Motivation
 
@@ -183,11 +183,11 @@ Entries whose `cmd` and `cwd` use no file-scoped template variables (`{{filepath
 If a file-scoped variable is used but zero or multiple files match (and no lock is set), the run is aborted with a message — narrow the `match`, or set a lock. Project variables (`{{dir}}`, `{{repo}}`, `{{folder}}`) resolve from the resolved source file, or from the `.flow.yml`'s own location when no source file is needed. Commands run from the nearest Git root for that context by default. An entry's optional `cwd` overrides the execution directory; relative paths are resolved from the selected default directory, POSIX or Windows absolute paths are used directly, and template variables are expanded. The target must be an existing directory.
 
 ```yaml
-compare-prosafe-pou:
-  match: ['**/compare/prosafe/pou.py']
+compare-script:
+  match: ['**/compare.py']
   cwd: .
   cmd: |
-    uv run yok compare prosafe pou /mnt/nas /mnt/hp --controller SCS0130 --detail
+    python "{{filepath}}" --input=sample.csv
 ```
 
 Running `:FlowRunHere` anywhere in this block executes the command directly. The path-like `match` alone does not resolve a target; add a file-scoped variable to `cmd` or `cwd`, or set a lock, if the command needs one.
@@ -240,6 +240,15 @@ py:
 
 main.py:
   cmd: python "{{filepath}}" --mode=dev
+```
+
+For wrapped commands, use a folded block scalar (`>-`). Adjacent nonblank lines fold into one command; blank lines remain line breaks. Use a literal block (`|`) when each line should remain a separate shell line.
+
+```yaml
+report.py:
+  cmd: >-
+    python "{{filepath}}" --input=sample.csv
+    --format=summary
 ```
 
 ### Advanced match mode

@@ -18,6 +18,32 @@ json:
 		assert.is_true(contains(parsed.json.cmd, "--data-binary @{{filepath}}"))
 	end)
 
+	it("folds multiline command scalars", function()
+		local parsed = assert(yaml.decode([[
+tuning.py:
+  cmd: >-
+    uv run yok automation tuning write --machine-key=yok2 --daff
+    --table=/tmp/tuning.csv
+]]))
+
+		assert.are.equal(
+			"uv run yok automation tuning write --machine-key=yok2 --daff --table=/tmp/tuning.csv",
+			parsed["tuning.py"].cmd
+		)
+	end)
+
+	it("preserves paragraph breaks in folded block scalars", function()
+		local parsed = assert(yaml.decode([[
+script:
+  cmd: >
+    echo first
+
+    echo second
+]]))
+
+		assert.are.equal("echo first\necho second", parsed.script.cmd)
+	end)
+
 	it("handles inline multiline scalar continuations without truncating later keys", function()
 		local parsed = assert(yaml.decode([[
 ioCombine.py:

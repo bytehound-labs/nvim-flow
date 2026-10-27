@@ -162,6 +162,17 @@ local function collect_inline_continuation(lines, index, parent_indent)
 	return folded, next_i
 end
 
+local function fold_block(block)
+	return (
+		block:gsub("\n+", function(line_breaks)
+			if #line_breaks == 1 then
+				return " "
+			end
+			return string.rep("\n", #line_breaks - 1)
+		end)
+	)
+end
+
 local function set_map_key(map, key, value)
 	local order = rawget(map, "__order")
 	if type(order) ~= "table" then
@@ -237,8 +248,12 @@ local function parse_map(lines, index, indent)
 
 			key = trim(key)
 			rest = strip_inline_comment(rest)
-			if rest == "|" or rest == "|-" or rest == "|+" then
+			local block_style = rest:match("^([|>])[+-]?$")
+			if block_style then
 				local block, next_i = collect_block(lines, i + 1, line_indent)
+				if block_style == ">" then
+					block = fold_block(block)
+				end
 				set_map_key(map, key, block)
 				i = next_i
 			elseif rest ~= "" then
